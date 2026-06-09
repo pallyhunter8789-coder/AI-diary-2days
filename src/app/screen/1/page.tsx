@@ -16,18 +16,20 @@ function Screen1Content() {
   const [respondentId, setRespondentId] = useState<string | null>(null);
   const [checking, setChecking] = useState<boolean>(true);
 
-  // 토큰 검증 및 기존 데이터 복원
+  // 토큰 검증 및 기존 데이터 복원 (토큰 누락 시 자체 세션 자동 발급 및 이동)
   useEffect(() => {
-    if (!token) {
-      router.replace("/");
-      return;
-    }
-    
     const checkToken = async () => {
       try {
-        const res = await fetch(`/api/respondent?t=${token}`);
+        const url = token ? `/api/respondent?t=${encodeURIComponent(token)}` : "/api/respondent";
+        const res = await fetch(url);
         const data = await res.json();
+        
         if (res.ok && data.success) {
+          if (!token && data.redirectPath) {
+            router.replace(data.redirectPath);
+            return;
+          }
+
           setRespondentId(data.respondent.id);
           
           fetch("/api/event", {
@@ -49,11 +51,19 @@ function Screen1Content() {
           }
           setChecking(false);
         } else {
-          router.replace("/");
+          if (token) {
+            router.replace("/screen/1");
+          } else {
+            router.replace("/");
+          }
         }
       } catch (e) {
         console.error("Token verification error:", e);
-        router.replace("/");
+        if (token) {
+          router.replace("/screen/1");
+        } else {
+          router.replace("/");
+        }
       }
     };
     
