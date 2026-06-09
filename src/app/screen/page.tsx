@@ -34,18 +34,32 @@ function ScreeningContent() {
   const [respondentId, setRespondentId] = useState<string | null>(null);
   const [checking, setChecking] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
+  const [initError, setInitError] = useState<string | null>(null);
 
   // 1. 진입 시 토큰 검증 또는 자동 발급
   useEffect(() => {
+    let isMounted = true;
+
+    // 8초 후 타임아웃 처리
+    const timeoutId = setTimeout(() => {
+      if (isMounted) {
+        setInitError("설문 준비 시간이 초과되었습니다. 네트워크 연결 상태를 확인한 후 새로고침해 주세요.");
+        setChecking(false);
+      }
+    }, 8000);
+
     const initSession = async () => {
       try {
         const url = token ? `/api/respondent?t=${encodeURIComponent(token)}` : "/api/respondent";
         const res = await fetch(url);
         const data = await res.json();
 
+        if (!isMounted) return;
+
         if (res.ok && data.success) {
           // 토큰이 없었으면 생성된 URL로 갱신하여 리다이렉트
           if (!token && data.redirectPath) {
+            clearTimeout(timeoutId);
             router.replace(data.redirectPath);
             return;
           }
@@ -75,32 +89,39 @@ function ScreeningContent() {
               console.error("Failed to restore screening data:", e);
             }
           }
-
-          setChecking(false);
         } else {
           // 잘못된 토큰을 지우고 신규 세션 발급을 받기 위해 쿼리 파라미터 제외하고 이동
+          clearTimeout(timeoutId);
           if (token) {
             router.replace("/screen");
           } else {
             router.replace("/");
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to initialize screening session:", err);
-        if (token) {
-          router.replace("/screen");
-        } else {
-          router.replace("/");
+        if (isMounted) {
+          setInitError(err.message || "서버 통신 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+        }
+      } finally {
+        clearTimeout(timeoutId);
+        if (isMounted) {
+          setChecking(false);
         }
       }
     };
 
     initSession();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
   }, [token, router]);
 
   // 임시 세션 입력값 자동 저장
   useEffect(() => {
-    if (checking) return;
+    if (checking || initError) return;
     sessionStorage.setItem(
       "screening_data",
       JSON.stringify({
@@ -114,7 +135,7 @@ function ScreeningContent() {
         respondentId
       })
     );
-  }, [age, sex, employmentType, aiFreq, kscoMajor, aiToolFree, aiPurposeFree, respondentId, checking]);
+  }, [age, sex, employmentType, aiFreq, kscoMajor, aiToolFree, aiPurposeFree, respondentId, checking, initError]);
 
   // 전체 유효성 평가
   const isValid =
@@ -176,6 +197,46 @@ function ScreeningContent() {
     }
   };
 
+  // 1. 준비 과정에서 실패 또는 타임아웃 오류 시 화면
+  if (initError) {
+    return (
+      <main className="flex-1 flex flex-col justify-between p-6 bg-white min-h-[100dvh]">
+        <div className="pt-8 text-center">
+          <div className="inline-block px-3 py-1 bg-red-50 rounded-full text-xs font-semibold text-red-600 tracking-wider mb-3">
+            준비 실패
+          </div>
+          <h1 className="text-2xl font-extrabold text-navy tracking-tight">
+            설문 환경 초기화 실패
+          </h1>
+        </div>
+
+        <div className="my-auto space-y-6 py-8">
+          <div className="bg-red-50/50 border border-red-100 rounded-2xl p-6 space-y-4 shadow-sm text-center">
+            <span className="text-red-500 text-4xl block">⚠️</span>
+            <p className="text-sm leading-relaxed text-gray-600 font-semibold">
+              {initError}
+            </p>
+          </div>
+          
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="btn primary py-4 font-bold text-sm shadow-md rounded-xl cursor-pointer hover:bg-navy2 active:scale-95 transition-all"
+          >
+            🔄 새로고침
+          </button>
+        </div>
+
+        <div className="pb-4 text-center">
+          <p className="text-[10px] text-gray-400">
+            © KISDI 정보통신정책연구원 · 테헤란씨씨
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  // 2. 토큰 검증 및 세션 생성 로딩 뷰
   if (checking) {
     return (
       <div className="flex-1 flex items-center justify-center p-6 bg-white min-h-[100dvh]">
