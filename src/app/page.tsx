@@ -6,10 +6,19 @@ import { useRouter, useSearchParams } from "next/navigation";
 function EntryContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const token = searchParams.get("t");
-  
+  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // 1. Next.js useSearchParams 및 window.location 더블체크 안전장치
+  useEffect(() => {
+    let t = searchParams.get("t");
+    if (!t && typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      t = params.get("t");
+    }
+    setToken(t);
+  }, [searchParams]);
 
   useEffect(() => {
     if (!token) {
@@ -19,11 +28,11 @@ function EntryContent() {
 
     const verifyToken = async () => {
       try {
+        setLoading(true);
         const response = await fetch(`/api/respondent?t=${encodeURIComponent(token)}`);
         const data = await response.json();
 
         if (response.ok && data.success) {
-          // 상태 전달을 위해 다음 페이지로 토큰을 쿼리 스트링 형태로 전달합니다.
           router.replace(`${data.redirectPath}${data.redirectPath.includes("?") ? "&" : "?"}t=${token}`);
         } else {
           setErrorMsg(data.error || "유효하지 않은 토큰입니다.");
@@ -39,13 +48,17 @@ function EntryContent() {
     verifyToken();
   }, [token, router]);
 
+  const handleStartDemo = () => {
+    router.push("/?t=test-token-1234");
+  };
+
   // 1. 토큰 검증 로딩 뷰
   if (loading && token) {
     return (
-      <main className="flex-1 flex flex-col items-center justify-center p-6 bg-white">
+      <main className="flex-1 flex flex-col items-center justify-center p-6 bg-white min-h-[100dvh]">
         <div className="flex flex-col items-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-navy border-t-cyan"></div>
-          <p className="text-sm font-medium text-navy tracking-wide animate-pulse">
+          <p className="text-sm font-bold text-navy tracking-wide animate-pulse">
             접속 토큰을 검증하고 있습니다...
           </p>
         </div>
@@ -55,7 +68,7 @@ function EntryContent() {
 
   // 2. 토큰 미인증 또는 누락 안내 뷰
   return (
-    <main className="flex-1 flex flex-col justify-between p-6 bg-white">
+    <main className="flex-1 flex flex-col justify-between p-6 bg-white min-h-[100dvh]">
       {/* 상단 헤더 */}
       <div className="pt-8 text-center">
         <div className="inline-block px-3 py-1 bg-bg-gray rounded-full text-xs font-semibold text-navy tracking-wider mb-3">
@@ -67,37 +80,53 @@ function EntryContent() {
       </div>
 
       {/* 중단 설명 박스 */}
-      <div className="my-auto space-y-6">
-        <div className="bg-[#f3fbfd] border border-[#d6eff6] rounded-2xl p-6 space-y-4">
+      <div className="my-auto space-y-6 py-8">
+        <div className="bg-[#f3fbfd] border border-[#d6eff6] rounded-2xl p-6 space-y-4 shadow-sm">
           <div className="flex items-center space-x-2">
-            <span className="text-cyan text-xl">💡</span>
-            <h2 className="text-base font-bold text-navy">접속 안내</h2>
+            <span className="text-red-500 text-xl">⚠️</span>
+            <h2 className="text-base font-extrabold text-navy">받으신 링크로만 참여 가능</h2>
           </div>
           
           {errorMsg ? (
-            <p className="text-sm leading-relaxed text-gray-600 font-medium">
-              입력하신 링크의 인증에 실패했습니다: <span className="text-red-500 font-bold">{errorMsg}</span>
+            <p className="text-sm leading-relaxed text-gray-600 font-semibold bg-red-50/50 p-3 rounded-xl border border-red-100 text-center">
+              인증 실패: <span className="text-red-500 font-bold">{errorMsg}</span>
             </p>
           ) : (
             <p className="text-sm leading-relaxed text-gray-600">
-              본 조사는 AI 서비스 이용 상태를 정밀 분석하기 위한 학술 조사입니다. 
-              참여를 위해서는 **전송받으신 개인별 전용 링크**를 통해 접속해 주셔야 합니다.
+              본 조사는 AI 서비스 이용자 분석을 위한 한정 연구 조사입니다.<br />
+              원활한 통계 분석을 위해 **전송받으신 개인별 전용 링크**를 통해서만 접속 및 참여하실 수 있습니다.
             </p>
           )}
 
-          <div className="text-xs text-gray-500 space-y-2 bg-white/70 rounded-xl p-3 border border-gray-100">
-            <p className="font-semibold text-navy">이동 방법:</p>
-            <ul className="list-disc pl-4 space-y-1">
-              <li>받으신 카카오톡, SMS, 또는 이메일 안의 **전용 URL**을 클릭해 주세요.</li>
-              <li>주소를 복사하여 브라우저 주소창에 완전히 붙여넣어 접속하십시오.</li>
+          <div className="text-xs text-gray-500 space-y-2 bg-white/80 rounded-xl p-3.5 border border-gray-100">
+            <p className="font-semibold text-[#203864]">올바른 참여 방법:</p>
+            <ul className="list-disc pl-4 space-y-1.5 leading-normal">
+              <li>전송받으신 카카오톡, 알림톡 또는 SMS 내의 **개별 전용 URL**을 클릭해 주세요.</li>
+              <li>링크를 복사하여 브라우저 주소창에 완전히 붙여넣고 다시 접속해주시기 바랍니다.</li>
             </ul>
           </div>
+        </div>
+
+        {/* 시연용 테스트 버튼 카드 */}
+        <div className="bg-gray-50 border border-gray-200/60 rounded-2xl p-5 space-y-3.5 text-center">
+          <div className="space-y-1">
+            <h3 className="text-xs font-extrabold text-cyan tracking-wider">DEMO VERSION</h3>
+            <p className="text-[11px] text-gray-500">
+              배포 및 시스템 작동 여부를 검증하기 위한 가상 시연 모드입니다.
+            </p>
+          </div>
+          <button
+            onClick={handleStartDemo}
+            className="btn cyan w-full py-3.5 text-white font-bold text-sm shadow-md shadow-cyan/15 rounded-xl cursor-pointer hover:bg-cyan-d active:scale-95 transition-all"
+          >
+            ✨ (시연용) 테스트 토큰으로 시작하기
+          </button>
         </div>
       </div>
 
       {/* 하단 푸터 */}
       <div className="pb-4 text-center">
-        <p className="text-xs text-gray-400">
+        <p className="text-[10px] text-gray-400">
           © KISDI 정보통신정책연구원 · 테헤란씨씨
         </p>
       </div>
