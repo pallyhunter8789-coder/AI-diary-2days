@@ -151,10 +151,41 @@ function ScreeningContent() {
     aiPurposeFree.trim().length >= 2;
 
   const handleSubmit = async () => {
-    if (!isValid || !respondentId || submitting) return;
+    console.log('submit clicked', {
+      age,
+      sex,
+      employmentType,
+      aiFreq,
+      kscoMajor,
+      aiToolFree,
+      aiPurposeFree,
+      respondentId,
+      isValid
+    });
 
-    setSubmitting(true);
     try {
+      if (!respondentId) {
+        alert("세션 초기화가 완료되지 않았거나 토큰 정보가 유실되었습니다. 새로고침 후 다시 시도해 주세요.");
+        return;
+      }
+
+      if (!isValid) {
+        const missing = [];
+        if (!age) missing.push("1. 연령");
+        if (!sex) missing.push("2. 성별");
+        if (!employmentType) missing.push("3. 고용형태");
+        if (!aiFreq) missing.push("4. AI 사용빈도");
+        if (!kscoMajor) missing.push("5. 직종");
+        if (!aiToolFree || aiToolFree.trim().length < 2) missing.push("6. AI 도구명 (최소 2자)");
+        if (!aiPurposeFree || aiPurposeFree.trim().length < 2) missing.push("7. AI 사용 목적 (최소 2자)");
+        
+        alert(`입력하지 않았거나 형식에 맞지 않는 항목이 있습니다:\n- ${missing.join("\n- ")}`);
+        return;
+      }
+
+      if (submitting) return;
+      setSubmitting(true);
+
       const payload = {
         respondent_id: respondentId,
         age: age,
@@ -178,10 +209,8 @@ function ScreeningContent() {
 
       if (response.ok && data.success) {
         if (data.passed) {
-          // 통과 시 동의 단계로 이동
           router.push(`/consent?t=${token}`);
         } else {
-          // 탈락/셀마감 분기
           if (data.fail_reason === "quota_full") {
             router.push(`/complete?reason=quota_full&t=${token}`);
           } else {
@@ -189,11 +218,11 @@ function ScreeningContent() {
           }
         }
       } else {
-        alert(data.error || "제출 중 오류가 발생했습니다. 다시 시도해 주세요.");
+        alert(`제출 처리 중 오류 발생: ${data.error || "알 수 없는 에러가 발생했습니다."}`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Screening request failed:", err);
-      alert("서버 통신 실패. 잠시 후 다시 시도해 주세요.");
+      alert(`제출 중 예상치 못한 오류가 발생했습니다: ${err.message || err}`);
     } finally {
       setSubmitting(false);
     }
@@ -252,7 +281,7 @@ function ScreeningContent() {
 
   return (
     <AppShell
-      title="대상 여부 확인 (통합)"
+      title="대상 여부 확인"
       footerContent={
         <button
           type="button"
