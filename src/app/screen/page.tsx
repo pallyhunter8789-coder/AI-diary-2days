@@ -36,7 +36,7 @@ function ScreeningContent() {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [initError, setInitError] = useState<string | null>(null);
 
-  // 1. 진입 시 토큰 검증 또는 자동 발급
+  // 1. 진입 시 토큰 검증 또는 자동 발급 (의존성 배열을 빈 배열로 하여 1회만 실행되게 함)
   useEffect(() => {
     let isMounted = true;
 
@@ -50,7 +50,11 @@ function ScreeningContent() {
 
     const initSession = async () => {
       try {
-        const url = token ? `/api/respondent?t=${encodeURIComponent(token)}` : "/api/respondent";
+        // searchParams 대신 window.location.search 로부터 token을 1회만 직접 취득
+        const currentParams = new URLSearchParams(window.location.search);
+        const t = currentParams.get("t") || "";
+
+        const url = t ? `/api/respondent?t=${encodeURIComponent(t)}` : "/api/respondent";
         const res = await fetch(url);
         const data = await res.json();
 
@@ -58,7 +62,7 @@ function ScreeningContent() {
 
         if (res.ok && data.success) {
           // 토큰이 없었으면 생성된 URL로 갱신하여 리다이렉트
-          if (!token && data.redirectPath) {
+          if (!t && data.redirectPath) {
             clearTimeout(timeoutId);
             router.replace(data.redirectPath);
             return;
@@ -92,7 +96,7 @@ function ScreeningContent() {
         } else {
           // 잘못된 토큰을 지우고 신규 세션 발급을 받기 위해 쿼리 파라미터 제외하고 이동
           clearTimeout(timeoutId);
-          if (token) {
+          if (t) {
             router.replace("/screen");
           } else {
             router.replace("/");
@@ -117,7 +121,7 @@ function ScreeningContent() {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [token, router]);
+  }, []);
 
   // 임시 세션 입력값 자동 저장
   useEffect(() => {
