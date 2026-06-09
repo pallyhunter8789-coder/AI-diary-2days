@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import AppShell from "@/components/AppShell";
 
 const KSCO_JOBS = [
@@ -36,6 +36,10 @@ function ScreeningContent() {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [initError, setInitError] = useState<string | null>(null);
 
+  // 리렌더링과 관계없이 토큰 및 응답자 ID를 공유하기 위한 Ref 정의
+  const tokenRef = useRef<string>("");
+  const respondentIdRef = useRef<string>("");
+
   // 1. 진입 시 토큰 검증 또는 자동 발급 (의존성 배열을 빈 배열로 하여 1회만 실행되게 함)
   useEffect(() => {
     let isMounted = true;
@@ -50,9 +54,10 @@ function ScreeningContent() {
 
     const initSession = async () => {
       try {
-        // searchParams 대신 window.location.search 로부터 token을 1회만 직접 취득
+        // searchParams 대신 window.location.search 로부터 token을 1회만 직접 취득하여 Ref에 보존
         const currentParams = new URLSearchParams(window.location.search);
         const t = currentParams.get("t") || "";
+        tokenRef.current = t;
 
         const url = t ? `/api/respondent?t=${encodeURIComponent(t)}` : "/api/respondent";
         const res = await fetch(url);
@@ -68,6 +73,8 @@ function ScreeningContent() {
             return;
           }
 
+          // Ref와 State를 동시에 셋업하여 안정성 유지
+          respondentIdRef.current = data.respondent.id;
           setRespondentId(data.respondent.id);
 
           // 스크리닝 시작 이벤트 로그 기록
@@ -89,6 +96,10 @@ function ScreeningContent() {
               if (parsed.kscoMajor) setKscoMajor(parsed.kscoMajor);
               if (parsed.aiToolFree) setAiToolFree(parsed.aiToolFree);
               if (parsed.aiPurposeFree) setAiPurposeFree(parsed.aiPurposeFree);
+              if (parsed.respondentId) {
+                respondentIdRef.current = parsed.respondentId;
+                setRespondentId(parsed.respondentId);
+              }
             } catch (e) {
               console.error("Failed to restore screening data:", e);
             }
@@ -151,6 +162,10 @@ function ScreeningContent() {
     aiPurposeFree.trim().length >= 2;
 
   const handleSubmit = async () => {
+    // URL 파라미터 및 Ref에서 토큰과 세션 정보 안전하게 추출
+    const currentToken = token || tokenRef.current || (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("t") : "") || "";
+    const currentRespondentId = respondentId || respondentIdRef.current;
+
     console.log('submit clicked', {
       age,
       sex,
@@ -159,12 +174,13 @@ function ScreeningContent() {
       kscoMajor,
       aiToolFree,
       aiPurposeFree,
-      respondentId,
+      respondentId: currentRespondentId,
+      token: currentToken,
       isValid
     });
 
     try {
-      if (!respondentId) {
+      if (!currentRespondentId) {
         alert("세션 초기화가 완료되지 않았거나 토큰 정보가 유실되었습니다. 새로고침 후 다시 시도해 주세요.");
         return;
       }
@@ -187,7 +203,7 @@ function ScreeningContent() {
       setSubmitting(true);
 
       const payload = {
-        respondent_id: respondentId,
+        respondent_id: currentRespondentId,
         age: age,
         sex: sex,
         employment_type: employmentType,
@@ -209,12 +225,12 @@ function ScreeningContent() {
 
       if (response.ok && data.success) {
         if (data.passed) {
-          router.push(`/consent?t=${token}`);
+          router.push(`/consent?t=${currentToken}`);
         } else {
           if (data.fail_reason === "quota_full") {
-            router.push(`/complete?reason=quota_full&t=${token}`);
+            router.push(`/complete?reason=quota_full&t=${currentToken}`);
           } else {
-            router.push(`/complete?reason=screened_out&t=${token}`);
+            router.push(`/complete?reason=screened_out&t=${currentToken}`);
           }
         }
       } else {
