@@ -6,60 +6,56 @@ import { useRouter, useSearchParams } from "next/navigation";
 function EntryContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // 1. Next.js useSearchParams 및 window.location 더블체크 안전장치
+  // 1. 진입 시 토큰 검증 또는 자체 응답자 세션 자동 생성
   useEffect(() => {
-    let t = searchParams.get("t");
+    let t = searchParams.get("t") || "";
     if (!t && typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      t = params.get("t");
-    }
-    setToken(t);
-  }, [searchParams]);
-
-  useEffect(() => {
-    if (!token) {
-      setLoading(false);
-      return;
+      t = params.get("t") || "";
     }
 
-    const verifyToken = async () => {
+    const verifyOrRegister = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/respondent?t=${encodeURIComponent(token)}`);
+        const url = t ? `/api/respondent?t=${encodeURIComponent(t)}` : "/api/respondent";
+        const response = await fetch(url);
         const data = await response.json();
 
         if (response.ok && data.success) {
-          router.replace(`${data.redirectPath}${data.redirectPath.includes("?") ? "&" : "?"}t=${token}`);
+          let finalPath = data.redirectPath;
+          if (t && !finalPath.includes("t=")) {
+            finalPath = `${finalPath}${finalPath.includes("?") ? "&" : "?"}t=${t}`;
+          }
+          router.replace(finalPath);
         } else {
-          setErrorMsg(data.error || "유효하지 않은 토큰입니다.");
+          setErrorMsg(data.error || "설문 세션 생성 또는 토큰 검증에 실패했습니다.");
           setLoading(false);
         }
       } catch (err) {
-        console.error("Token verification failed:", err);
+        console.error("Respondent registration failed:", err);
         setErrorMsg("서버 통신 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
         setLoading(false);
       }
     };
 
-    verifyToken();
-  }, [token, router]);
+    verifyOrRegister();
+  }, [searchParams, router]);
 
   const handleStartDemo = () => {
     router.push("/?t=test-token-1234");
   };
 
-  // 1. 토큰 검증 로딩 뷰
-  if (loading && token) {
+  // 1. 토큰 검증 및 세션 생성 로딩 뷰
+  if (loading) {
     return (
       <main className="flex-1 flex flex-col items-center justify-center p-6 bg-white min-h-[100dvh]">
         <div className="flex flex-col items-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-navy border-t-cyan"></div>
           <p className="text-sm font-bold text-navy tracking-wide animate-pulse">
-            접속 토큰을 검증하고 있습니다...
+            설문 환경을 준비하고 있습니다...
           </p>
         </div>
       </main>

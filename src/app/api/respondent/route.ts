@@ -7,15 +7,52 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const token = searchParams.get("t");
 
-  if (!token) {
-    return NextResponse.json(
-      { error: "Token parameter is required", code: "missing_token" },
-      { status: 400 }
-    );
-  }
-
   try {
-    // 1. 응답자 토큰 검증
+    // 1. 토큰이 없는 자체 공개 설문 참여자의 경우 신규 세션/응답자 자동 생성
+    if (!token) {
+      const selfToken = `self-${Math.random().toString(36).substring(2, 11)}-${Date.now()}`;
+      
+      const { data: newRespondent, error: insertError } = await supabaseServer
+        .from("respondents")
+        .insert({
+          panel_source: "self",
+          access_token: selfToken,
+          status: "invited",
+        })
+        .select("*")
+        .single();
+
+      if (insertError || !newRespondent) {
+        console.error("Failed to auto-create self respondent:", insertError);
+        return NextResponse.json({ error: "Failed to create survey session" }, { status: 500 });
+      }
+
+      // events에 'open' 기록
+      await supabaseServer.from("events").insert({
+        respondent_id: newRespondent.id,
+        event_type: "open",
+        meta: {
+          access_token: selfToken,
+          status_at_entry: "invited",
+          user_agent: req.headers.get("user-agent"),
+          ip: req.headers.get("x-forwarded-for") || "unknown",
+          auto_created: true,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        respondent: {
+          id: newRespondent.id,
+          panel_source: newRespondent.panel_source,
+          panel_id: newRespondent.panel_id,
+          status: newRespondent.status,
+        },
+        redirectPath: `/screen/1?t=${selfToken}`,
+      });
+    }
+
+    // 2. 응답자 토큰 검증
     const { data: respondent, error: fetchError } = await supabaseServer
       .from("respondents")
       .select("*")
