@@ -20,9 +20,9 @@ function ConsentContent() {
       return;
     }
 
-    const saved = sessionStorage.getItem("s1_data");
+    const saved = sessionStorage.getItem("s1_data") || sessionStorage.getItem("screening_data");
     if (!saved) {
-      router.replace(`/screen/1?t=${token}`);
+      router.replace(`/screen?t=${token}`);
       return;
     }
 
@@ -39,8 +39,8 @@ function ConsentContent() {
         }).catch(err => console.error("Failed to log consent_view:", err));
       }
     } catch (e) {
-      console.error("Failed to parse S1 data:", e);
-      router.replace(`/screen/1?t=${token}`);
+      console.error("Failed to parse screening data:", e);
+      router.replace(`/screen?t=${token}`);
     }
   }, [token, router]);
 

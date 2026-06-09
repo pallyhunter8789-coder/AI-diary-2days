@@ -104,7 +104,8 @@ export async function POST(req: NextRequest) {
 
     // 4. DB 상태 변경 및 로깅
     // 4.1 screening 테이블 upsert
-    const { error: screeningError } = await supabaseServer.from("screening").upsert({
+    console.log("[Backend Screening Debug] Upserting screening table for respondent:", respondent_id);
+    const { data: screeningUpsertData, error: screeningError } = await supabaseServer.from("screening").upsert({
       respondent_id,
       age: ageNum,
       age_band: ageBand,
@@ -116,11 +117,13 @@ export async function POST(req: NextRequest) {
       ksco_major,
       passed,
       fail_reason,
-    });
+    }).select("*");
+
+    console.log("[Backend Screening Debug] Screening upsert result. data:", screeningUpsertData, "error:", screeningError);
 
     if (screeningError) {
       console.error("Failed to insert screening record:", screeningError);
-      throw new Error("Database error on screening logging");
+      throw new Error(`Database error on screening logging: ${screeningError.message} (Code: ${screeningError.code})`);
     }
 
     // 4.2 respondents 테이블 업데이트
@@ -137,14 +140,18 @@ export async function POST(req: NextRequest) {
       updateData.quota_cell_ksco = quotaCellKsco;
     }
 
-    const { error: respondentUpdateError } = await supabaseServer
+    console.log("[Backend Screening Debug] Updating respondent status to:", finalStatus, "payload:", updateData);
+    const { data: respondentUpdateData, error: respondentUpdateError } = await supabaseServer
       .from("respondents")
       .update(updateData)
-      .eq("id", respondent_id);
+      .eq("id", respondent_id)
+      .select("*");
+
+    console.log("[Backend Screening Debug] Respondent status update result. data:", respondentUpdateData, "error:", respondentUpdateError);
 
     if (respondentUpdateError) {
       console.error("Failed to update respondent status:", respondentUpdateError);
-      throw new Error("Database error on respondent update");
+      throw new Error(`Database error on respondent update: ${respondentUpdateError.message} (Code: ${respondentUpdateError.code})`);
     }
 
     // 4.3 events 테이블 패러데이터 기록
@@ -169,7 +176,11 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error("Screening process error:", err);
     return NextResponse.json(
-      { error: "Internal Server Error", message: err.message },
+      { 
+        success: false, 
+        error: err.message || "Internal Server Error",
+        details: err.details || err.hint || err.message || "No extra details"
+      },
       { status: 500 }
     );
   }

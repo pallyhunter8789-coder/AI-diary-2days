@@ -234,22 +234,50 @@ function ScreeningContent() {
       });
 
       const data = await response.json();
+      console.log("[Screening Submit Debug] API Response status:", response.status, "ok:", response.ok);
+      console.log("[Screening Submit Debug] API Response payload data:", data);
+      if (data.error) {
+        console.error("[Screening Submit Debug] API Response contains error:", data.error, "details:", data.details);
+      }
 
       if (response.ok && data.success) {
+        // 하위 호환성(consent, onboarding, diary 등)을 위해 s1_data 키로도 동일하게 백업 저장
+        sessionStorage.setItem(
+          "s1_data",
+          JSON.stringify({
+            respondentId: currentRespondentId,
+            age,
+            sex,
+            employmentType,
+            aiFreq,
+            kscoMajor,
+            aiToolFree,
+            aiPurposeFree,
+          })
+        );
+
         if (data.passed) {
-          router.push(`/consent?t=${currentToken}`);
+          const dest = `/consent?t=${currentToken}`;
+          console.log("[Screening Submit Debug] 이동 시작 (통과):", dest);
+          router.push(dest);
         } else {
+          let dest = "";
           if (data.fail_reason === "quota_full") {
-            router.push(`/complete?reason=quota_full&t=${currentToken}`);
+            dest = `/complete?reason=quota_full&t=${currentToken}`;
           } else {
-            router.push(`/complete?reason=screened_out&t=${currentToken}`);
+            dest = `/complete?reason=screened_out&t=${currentToken}`;
           }
+          console.log("[Screening Submit Debug] 이동 시작 (탈락):", dest);
+          router.push(dest);
         }
       } else {
-        alert(`제출 처리 중 오류 발생: ${data.error || "알 수 없는 에러가 발생했습니다."}`);
+        const errMsg = data.error || "알 수 없는 에러가 발생했습니다.";
+        const errDetails = data.details || "상세 정보 없음";
+        console.log("[Screening Submit Debug] Submission failed. error:", errMsg, "details:", errDetails);
+        alert(`제출 처리 중 오류 발생: ${errMsg}\n(상세 내용: ${errDetails})`);
       }
     } catch (err: any) {
-      console.error("Screening request failed:", err);
+      console.error("[Screening Submit Debug] Screening request failed:", err);
       alert(`제출 중 예상치 못한 오류가 발생했습니다: ${err.message || err}`);
     } finally {
       setSubmitting(false);

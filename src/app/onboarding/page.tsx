@@ -41,9 +41,9 @@ function OnboardingContent() {
       return;
     }
 
-    const saved = sessionStorage.getItem("s1_data");
+    const saved = sessionStorage.getItem("s1_data") || sessionStorage.getItem("screening_data");
     if (!saved) {
-      router.replace(`/screen/1?t=${token}`);
+      router.replace(`/screen?t=${token}`);
       return;
     }
 
@@ -51,8 +51,8 @@ function OnboardingContent() {
       setS1Data(JSON.parse(saved));
       setVerifying(false);
     } catch (e) {
-      console.error("Failed to parse S1 data:", e);
-      router.replace(`/screen/1?t=${token}`);
+      console.error("Failed to parse screening data:", e);
+      router.replace(`/screen?t=${token}`);
     }
   }, [token, router]);
 

@@ -132,7 +132,7 @@ function DiaryContent() {
         
         if (res.ok && data.success) {
           let currentId = null;
-          const savedS1 = sessionStorage.getItem("s1_data");
+          const savedS1 = sessionStorage.getItem("s1_data") || sessionStorage.getItem("screening_data");
           if (savedS1) {
             const parsed = JSON.parse(savedS1);
             setRespondentId(parsed.respondentId);
