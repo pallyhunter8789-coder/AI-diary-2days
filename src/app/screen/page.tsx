@@ -94,12 +94,10 @@ function ScreeningContent() {
             }
           }
         } else {
-          // 잘못된 토큰을 지우고 신규 세션 발급을 받기 위해 쿼리 파라미터 제외하고 이동
+          // 잘못된 접근(유효하지 않은 토큰) 시 다른 경로로 리다이렉트하지 않고 정적 안내 화면을 보여준 채 멈춤
           clearTimeout(timeoutId);
-          if (t) {
-            router.replace("/screen");
-          } else {
-            router.replace("/");
+          if (isMounted) {
+            setInitError(data.error || "유효하지 않은 토큰이거나 잘못된 접근입니다. 올바른 설문 링크를 확인해 주세요.");
           }
         }
       } catch (err: any) {

@@ -1,5 +1,14 @@
 import { redirect } from "next/navigation";
 
-export default function Screen2Redirect() {
-  redirect("/screen");
+interface PageProps {
+  searchParams: Promise<{ t?: string }>;
+}
+
+export default async function Screen2Redirect({ searchParams }: PageProps) {
+  const { t } = await searchParams;
+  if (t) {
+    redirect(`/screen?t=${encodeURIComponent(t)}`);
+  } else {
+    redirect("/screen");
+  }
 }

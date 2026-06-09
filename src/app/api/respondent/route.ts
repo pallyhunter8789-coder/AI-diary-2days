@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
           panel_id: newRespondent.panel_id,
           status: newRespondent.status,
         },
-        redirectPath: `/screen/1?t=${selfToken}`,
+        redirectPath: `/screen?t=${selfToken}`,
       });
     }
 
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
     let redirectPath = "/";
     switch (respondent.status) {
       case "invited":
-        redirectPath = "/screen/1";
+        redirectPath = "/screen";
         break;
       case "screened_in":
         redirectPath = "/diary/1";
