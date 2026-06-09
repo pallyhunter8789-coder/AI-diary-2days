@@ -60,8 +60,13 @@ function ScreeningContent() {
         tokenRef.current = t;
 
         const url = t ? `/api/respondent?t=${encodeURIComponent(t)}` : "/api/respondent";
+        console.log("[Screening Init Debug] Initiating session check url:", url);
+
         const res = await fetch(url);
         const data = await res.json();
+
+        console.log("[Screening Init Debug] API Response status:", res.status, "ok:", res.ok);
+        console.log("[Screening Init Debug] API Response payload:", data);
 
         if (!isMounted) return;
 
@@ -69,7 +74,7 @@ function ScreeningContent() {
           // 토큰이 없었으면 생성된 URL로 갱신하여 리다이렉트
           if (!t && data.redirectPath) {
             clearTimeout(timeoutId);
-            router.replace(data.redirectPath);
+            window.location.replace(data.redirectPath);
             return;
           }
 
