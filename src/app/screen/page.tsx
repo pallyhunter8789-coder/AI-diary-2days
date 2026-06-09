@@ -166,21 +166,28 @@ function ScreeningContent() {
     const currentToken = token || tokenRef.current || (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("t") : "") || "";
     const currentRespondentId = respondentId || respondentIdRef.current;
 
-    console.log('submit clicked', {
-      age,
-      sex,
-      employmentType,
-      aiFreq,
-      kscoMajor,
-      aiToolFree,
-      aiPurposeFree,
-      respondentId: currentRespondentId,
-      token: currentToken,
-      isValid
-    });
+    // 상세 디버깅 로그 기록
+    console.log("[Screening Submit Debug] --- SUBMIT ACTION TRIGGERED ---");
+    console.log("[Screening Submit Debug] - window.location.search :", typeof window !== "undefined" ? window.location.search : "undefined");
+    console.log("[Screening Submit Debug] - checking (세션 초기화 진행중여부) :", checking);
+    console.log("[Screening Submit Debug] - initError (세션 에러 상태) :", initError);
+    console.log("[Screening Submit Debug] - token (state) :", token);
+    console.log("[Screening Submit Debug] - tokenRef.current (Ref) :", tokenRef.current);
+    console.log("[Screening Submit Debug] - currentToken (최종 도출) :", currentToken);
+    console.log("[Screening Submit Debug] - respondentId (state) :", respondentId);
+    console.log("[Screening Submit Debug] - respondentIdRef.current (Ref) :", respondentIdRef.current);
+    console.log("[Screening Submit Debug] - currentRespondentId (최종 도출) :", currentRespondentId);
+    console.log("[Screening Submit Debug] - isValid (입력 항목들 유효성) :", isValid);
 
     try {
       if (!currentRespondentId) {
+        console.log("[Screening Submit Debug] FAILURE: currentRespondentId is EMPTY!");
+        if (!respondentId && !respondentIdRef.current) {
+          console.log("[Screening Submit Debug] Detailed Reason: Both respondentId state and respondentIdRef.current are empty/null.");
+        }
+        if (checking) {
+          console.log("[Screening Submit Debug] Detailed Reason: checking state is still TRUE (initialization in progress).");
+        }
         alert("세션 초기화가 완료되지 않았거나 토큰 정보가 유실되었습니다. 새로고침 후 다시 시도해 주세요.");
         return;
       }
