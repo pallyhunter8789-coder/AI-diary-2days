@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
       .select("id, start_slot, end_slot")
       .eq("diary_day_id", diaryDay.id);
 
-    if (entry.id) {
+    if (entry.id && !entry.id.startsWith("temp_")) {
       query = query.neq("id", entry.id);
     }
 
@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
       updated_at: new Date().toISOString(),
     };
 
-    if (entry.id) {
+    if (entry.id && !entry.id.startsWith("temp_")) {
       entryData.id = entry.id;
     }
 

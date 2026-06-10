@@ -221,6 +221,15 @@ function DiaryContent() {
           setSaveStatus("saved");
           lastFailedSaveRef.current = null;
           showToast(isDelete ? "블록이 삭제되었습니다." : "작성 내역이 자동 저장되었습니다.");
+          
+          if (!isDelete) {
+            const data = await response.json();
+            if (data.success && data.entry_id && updatedEntry.id !== data.entry_id) {
+              setEntries((prev) =>
+                prev.map((e) => (e.id === updatedEntry.id ? { ...e, id: data.entry_id } : e))
+              );
+            }
+          }
         } else {
           setSaveStatus("error");
           lastFailedSaveRef.current = { entry: updatedEntry, isDelete };
