@@ -31,10 +31,32 @@ function ScreeningContent() {
   const [aiToolFree, setAiToolFree] = useState<string>("");
   const [aiPurposeFree, setAiPurposeFree] = useState<string>("");
 
+  const [aiToolSelect, setAiToolSelect] = useState<string>("");
+  const [aiToolOther, setAiToolOther] = useState<string>("");
+  const [aiPurposeSelect, setAiPurposeSelect] = useState<string>("");
+  const [aiPurposeOther, setAiPurposeOther] = useState<string>("");
+
   const [respondentId, setRespondentId] = useState<string | null>(null);
   const [checking, setChecking] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [initError, setInitError] = useState<string | null>(null);
+
+  // Q6, Q7 내부 선택값과 자유 기술값의 동기화
+  useEffect(() => {
+    if (aiToolSelect === "기타") {
+      setAiToolFree(aiToolOther);
+    } else {
+      setAiToolFree(aiToolSelect);
+    }
+  }, [aiToolSelect, aiToolOther]);
+
+  useEffect(() => {
+    if (aiPurposeSelect === "기타") {
+      setAiPurposeFree(aiPurposeOther);
+    } else {
+      setAiPurposeFree(aiPurposeSelect);
+    }
+  }, [aiPurposeSelect, aiPurposeOther]);
 
   // 리렌더링과 관계없이 토큰 및 응답자 ID를 공유하기 위한 Ref 정의
   const tokenRef = useRef<string>("");
@@ -99,8 +121,32 @@ function ScreeningContent() {
               if (parsed.employmentType) setEmploymentType(parsed.employmentType);
               if (parsed.aiFreq) setAiFreq(parsed.aiFreq);
               if (parsed.kscoMajor) setKscoMajor(parsed.kscoMajor);
-              if (parsed.aiToolFree) setAiToolFree(parsed.aiToolFree);
-              if (parsed.aiPurposeFree) setAiPurposeFree(parsed.aiPurposeFree);
+              if (parsed.aiToolFree) {
+                setAiToolFree(parsed.aiToolFree);
+                const defaultTools = ["ChatGPT (챗GPT)", "제미나이 (Gemini)", "클로드 (Claude)", "코파일럿 (Microsoft Copilot)", "클로바X (CLOVA X)"];
+                if (defaultTools.includes(parsed.aiToolFree)) {
+                  setAiToolSelect(parsed.aiToolFree);
+                } else {
+                  setAiToolSelect("기타");
+                  setAiToolOther(parsed.aiToolFree);
+                }
+              }
+              if (parsed.aiPurposeFree) {
+                setAiPurposeFree(parsed.aiPurposeFree);
+                const defaultPurposes = [
+                  "업무 처리·자동화 (코딩·데이터·반복업무 등)",
+                  "정보 검색·학습 (질문·자료 찾기)",
+                  "문서·콘텐츠 작성 (작성·요약·번역)",
+                  "기획·아이디어·의사결정 지원",
+                  "이미지·영상 등 창작"
+                ];
+                if (defaultPurposes.includes(parsed.aiPurposeFree)) {
+                  setAiPurposeSelect(parsed.aiPurposeFree);
+                } else {
+                  setAiPurposeSelect("기타");
+                  setAiPurposeOther(parsed.aiPurposeFree);
+                }
+              }
               if (parsed.respondentId) {
                 respondentIdRef.current = parsed.respondentId;
                 setRespondentId(parsed.respondentId);
@@ -498,32 +544,73 @@ function ScreeningContent() {
           )}
         </div>
 
-        {/* 6. AI 도구 자유 기술 */}
+        {/* 6. AI 도구 선택 (객관식) */}
         <div className="space-y-3">
           <label className="block text-sm font-bold text-navy">
-            6. 최근 귀하가 가장 자주 사용하는 AI 서비스/도구명을 직접 적어주세요.
+            6. 최근 귀하가 가장 자주 사용하는 AI 서비스/도구명은 무엇입니까? (단일 선택)
           </label>
-          <input
-            type="text"
-            placeholder="예: ChatGPT, Claude, Papago, Notion AI 등"
-            value={aiToolFree}
-            onChange={(e) => setAiToolFree(e.target.value)}
-            className="txt text-sm"
-          />
+          <div className="grid grid-cols-2 gap-3">
+            {["ChatGPT (챗GPT)", "제미나이 (Gemini)", "클로드 (Claude)", "코파일럿 (Microsoft Copilot)", "클로바X (CLOVA X)", "기타"].map((tool) => (
+              <button
+                key={tool}
+                type="button"
+                onClick={() => setAiToolSelect(tool)}
+                className={`chip py-4 text-center font-bold text-sm ${aiToolSelect === tool ? "on" : ""}`}
+              >
+                {tool}
+              </button>
+            ))}
+          </div>
+          {aiToolSelect === "기타" && (
+            <div className="space-y-2 mt-2 animate-fadeIn">
+              <label className="block text-xs font-semibold text-gray-500">서비스명을 직접 적어주세요.</label>
+              <input
+                type="text"
+                placeholder="예: Papago, Notion AI, 뤼튼 등"
+                value={aiToolOther}
+                onChange={(e) => setAiToolOther(e.target.value)}
+                className="txt text-sm"
+              />
+            </div>
+          )}
         </div>
 
-        {/* 7. 사용 목적 자유 기술 */}
+        {/* 7. 사용 목적 선택 (객관식) */}
         <div className="space-y-3">
           <label className="block text-sm font-bold text-navy">
-            7. 위 AI 도구의 주된 사용 목적이나 구체적인 활용 방식을 적어주세요.
+            7. 위 AI 도구의 주된 사용 목적이나 활용 방식은 무엇입니까? (단일 선택)
           </label>
-          <textarea
-            placeholder="예: 업무 문서 번역 및 보고서 초안 요약, 챗봇을 통한 기초 지식 학습 등"
-            value={aiPurposeFree}
-            onChange={(e) => setAiPurposeFree(e.target.value)}
-            rows={3}
-            className="txt text-sm w-full border border-gray-200 rounded-xl p-3 focus:outline-none focus:border-cyan"
-          />
+          <div className="flex flex-col gap-3">
+            {[
+              "업무 처리·자동화 (코딩·데이터·반복업무 등)",
+              "정보 검색·학습 (질문·자료 찾기)",
+              "문서·콘텐츠 작성 (작성·요약·번역)",
+              "기획·아이디어·의사결정 지원",
+              "이미지·영상 등 창작",
+              "기타"
+            ].map((purpose) => (
+              <button
+                key={purpose}
+                type="button"
+                onClick={() => setAiPurposeSelect(purpose)}
+                className={`chip w-full py-4 text-left px-5 font-bold text-sm ${aiPurposeSelect === purpose ? "on" : ""}`}
+              >
+                {purpose}
+              </button>
+            ))}
+          </div>
+          {aiPurposeSelect === "기타" && (
+            <div className="space-y-2 mt-2 animate-fadeIn">
+              <label className="block text-xs font-semibold text-gray-500">구체적인 활용 방식을 직접 적어주세요.</label>
+              <textarea
+                placeholder="예: 개인 웹사이트 디자인 아이디어 탐색 등"
+                value={aiPurposeOther}
+                onChange={(e) => setAiPurposeOther(e.target.value)}
+                rows={3}
+                className="txt text-sm w-full border border-gray-200 rounded-xl p-3 focus:outline-none focus:border-cyan"
+              />
+            </div>
+          )}
         </div>
       </div>
     </AppShell>
