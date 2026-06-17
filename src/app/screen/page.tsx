@@ -116,7 +116,19 @@ function ScreeningContent() {
           if (saved) {
             try {
               const parsed = JSON.parse(saved);
-              if (parsed.age) setAge(parsed.age);
+              if (parsed.age) {
+                // 하위 호환성: 기존 숫자 나이가 저장되어 있는 경우 연령대 코드로 자동 전환
+                const ageNum = parseInt(parsed.age, 10);
+                if (!isNaN(ageNum)) {
+                  if (ageNum >= 19 && ageNum <= 29) setAge("19_29");
+                  else if (ageNum >= 30 && ageNum <= 39) setAge("30_39");
+                  else if (ageNum >= 40 && ageNum <= 49) setAge("40_49");
+                  else if (ageNum >= 50 && ageNum <= 59) setAge("50_59");
+                  else if (ageNum >= 60) setAge("60_plus");
+                } else {
+                  setAge(parsed.age);
+                }
+              }
               if (parsed.sex) setSex(parsed.sex);
               if (parsed.employmentType) setEmploymentType(parsed.employmentType);
               if (parsed.aiFreq) setAiFreq(parsed.aiFreq);
@@ -204,7 +216,6 @@ function ScreeningContent() {
   // 전체 유효성 평가
   const isValid =
     age &&
-    parseInt(age, 10) >= 1 &&
     sex &&
     employmentType &&
     aiFreq &&
@@ -403,24 +414,27 @@ function ScreeningContent() {
           <p className="text-xs text-gray-400">본 설문조사 대상 해당 여부 판정을 위해 모든 문항에 답변해 주세요.</p>
         </div>
 
-        {/* 1. 연령 입력 */}
+        {/* 1. 연령 선택 */}
         <div className="space-y-3">
-          <label className="block text-sm font-bold text-navy">1. 귀하의 연령(나이)은 어떻게 되십니까?</label>
-          <div className="flex items-center space-x-2">
-            <input
-              type="number"
-              pattern="[0-9]*"
-              inputMode="numeric"
-              placeholder="예: 32"
-              value={age}
-              onChange={(e) => setAge(e.target.value)}
-              className="txt w-24 text-center text-lg font-bold"
-            />
-            <span className="text-sm font-semibold text-gray-600">세 (만 나이 기준)</span>
+          <label className="block text-sm font-bold text-navy">1. 귀하의 연령대는 어떻게 되십니까?</label>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { k: "19_29", label: "① 19–29세" },
+              { k: "30_39", label: "② 30–39세" },
+              { k: "40_49", label: "③ 40–49세" },
+              { k: "50_59", label: "④ 50–59세" },
+              { k: "60_plus", label: "⑤ 60세 이상" }
+            ].map((band) => (
+              <button
+                key={band.k}
+                type="button"
+                onClick={() => setAge(band.k)}
+                className={`chip py-4 text-center font-bold text-sm ${age === band.k ? "on" : ""}`}
+              >
+                {band.label}
+              </button>
+            ))}
           </div>
-          {age && parseInt(age, 10) < 19 && (
-            <p className="text-xs font-semibold text-red-500">※ 만 19세 미만은 본 조사에 참여할 수 없습니다.</p>
-          )}
         </div>
 
         {/* 2. 성별 선택 */}

@@ -27,9 +27,39 @@ export async function POST(req: NextRequest) {
     let passed = true;
     let fail_reason: string | null = null;
 
+    let ageBand: string | null = null;
+    let ageNum = 0;
+
+    if (age === "19_29") {
+      ageNum = 19;
+      ageBand = "19_29";
+    } else if (age === "30_39") {
+      ageNum = 30;
+      ageBand = "30_39";
+    } else if (age === "40_49") {
+      ageNum = 40;
+      ageBand = "40_49";
+    } else if (age === "50_59") {
+      ageNum = 50;
+      ageBand = "50_59";
+    } else if (age === "60_plus") {
+      ageNum = 60;
+      ageBand = "60_plus";
+    } else {
+      // 기존 주관식 숫자(하위 호환성)
+      const parsedAge = parseInt(age, 10);
+      if (!isNaN(parsedAge)) {
+        ageNum = parsedAge;
+        if (ageNum >= 19 && ageNum <= 29) ageBand = "19_29";
+        else if (ageNum >= 30 && ageNum <= 39) ageBand = "30_39";
+        else if (ageNum >= 40 && ageNum <= 49) ageBand = "40_49";
+        else if (ageNum >= 50 && ageNum <= 59) ageBand = "50_59";
+        else if (ageNum >= 60) ageBand = "60_plus";
+      }
+    }
+
     // 1. S1 검증
-    const ageNum = parseInt(age, 10);
-    if (isNaN(ageNum) || ageNum < 19) {
+    if (!ageBand || ageNum < 19) {
       passed = false;
       fail_reason = "age";
     } else if (employment_type === "none") {
@@ -68,26 +98,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    let ageBand: string | null = null;
     let quotaCellSexage: string | null = null;
     let quotaCellKsco: string | null = null;
 
     // 3. Quota 및 상태 판단
     if (passed) {
-      if (ageNum >= 19 && ageNum <= 29) ageBand = "19_29";
-      else if (ageNum >= 30 && ageNum <= 39) ageBand = "30_39";
-      else if (ageNum >= 40 && ageNum <= 49) ageBand = "40_49";
-      else if (ageNum >= 50 && ageNum <= 59) ageBand = "50_59";
-      else if (ageNum >= 60) ageBand = "60_plus";
-
-      quotaCellSexage = `${sex}_${ageBand}`;
+      // 60세 이상은 할당(Quota) 셀에서 제외
+      if (ageBand !== "60_plus") {
+        quotaCellSexage = `${sex}_${ageBand}`;
+      } else {
+        quotaCellSexage = null;
+      }
       quotaCellKsco = ksco_major;
 
-      // quota_cells 진행 상태 조회
+      // quota_cells 진행 상태 조회 (quotaCellSexage가 null인 경우 Syntax Error 방지)
+      let orClause = `cell_key.eq.${quotaCellKsco}`;
+      if (quotaCellSexage) {
+        orClause = `cell_key.eq.${quotaCellSexage},cell_key.eq.${quotaCellKsco}`;
+      }
+
       const { data: progress, error: progressError } = await supabaseServer
         .from("v_quota_progress")
         .select("*")
-        .or(`cell_key.eq.${quotaCellSexage},cell_key.eq.${quotaCellKsco}`);
+        .or(orClause);
 
       if (progressError) {
         console.error("Failed to check quota progress:", progressError);
