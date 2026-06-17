@@ -102,6 +102,7 @@ function DiaryContent() {
   
   const [editorOpen, setEditorOpen] = useState<boolean>(false);
   const [editingEntry, setEditingEntry] = useState<Partial<ClientDiaryEntry> | null>(null);
+  const [showDetailInput, setShowDetailInput] = useState<boolean>(false);
   
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -297,17 +298,30 @@ function DiaryContent() {
       return;
     }
 
+    let lastLocation = "workplace";
+    let lastAiUsed = false;
+    let lastAiTools: ClientAiTool[] = [];
+    
+    if (entries.length > 0) {
+      const sorted = [...entries].sort((a, b) => b.end_slot - a.end_slot);
+      const last = sorted[0];
+      lastLocation = last.location || "workplace";
+      lastAiUsed = !!last.ai_used;
+      lastAiTools = last.ai_tools ? last.ai_tools.map(t => ({ ...t })) : [];
+    }
+
     const newEntry: Partial<ClientDiaryEntry> = {
       id: "temp_" + Date.now(),
       start_slot: start,
       end_slot: end,
       activity_major: "",
-      location: "workplace",
-      ai_used: false,
-      ai_tools: [],
+      location: lastLocation,
+      ai_used: lastAiUsed,
+      ai_tools: lastAiUsed && lastAiTools.length === 0 ? [{ ai_type: "", ai_tool_name: "", purpose: "" }] : lastAiTools,
     };
     
     setEditingEntry(newEntry);
+    setShowDetailInput(false);
     setEditorOpen(true);
   };
 
@@ -408,6 +422,49 @@ function DiaryContent() {
     setEditorOpen(false);
     setEditingEntry(null);
     triggerAutoSave(finalEntry);
+
+    // 다음 빈 슬롯 자동 포커스
+    let nextStart = finalEntry.end_slot + 1;
+    let foundNextSlot = false;
+    while (nextStart < SLOTS) {
+      const hasOverlap = updatedEntries.some(
+        (e) => !(nextStart < e.start_slot || nextStart > e.end_slot)
+      );
+      if (!hasOverlap) {
+        foundNextSlot = true;
+        break;
+      }
+      nextStart++;
+    }
+
+    if (foundNextSlot) {
+      const lastLocation = finalEntry.location || "workplace";
+      const lastAiUsed = !!finalEntry.ai_used;
+      const lastAiTools = finalEntry.ai_tools ? finalEntry.ai_tools.map(t => ({ ...t })) : [];
+
+      const nextEntry: Partial<ClientDiaryEntry> = {
+        id: "temp_" + Date.now(),
+        start_slot: nextStart,
+        end_slot: nextStart,
+        activity_major: "",
+        location: lastLocation,
+        ai_used: lastAiUsed,
+        ai_tools: lastAiUsed && lastAiTools.length === 0 ? [{ ai_type: "", ai_tool_name: "", purpose: "" }] : lastAiTools,
+      };
+
+      setTimeout(() => {
+        setEditingEntry(nextEntry);
+        setShowDetailInput(false);
+        setEditorOpen(true);
+        
+        // 스크롤 이동
+        const targetScrollY = nextStart * ROW_HEIGHT;
+        const container = timelineRef.current?.parentElement;
+        if (container) {
+          container.scrollTo({ top: targetScrollY - 100, behavior: "smooth" });
+        }
+      }, 150);
+    }
   };
 
   const handleDeleteEntry = (id: string) => {
@@ -444,12 +501,52 @@ function DiaryContent() {
     showToast("직전 활동 정보를 불러왔습니다.");
   };
 
+  const handleExtendSlots = (n: number) => {
+    if (!editingEntry) return;
+    const currentStart = editingEntry.start_slot!;
+    const currentEnd = editingEntry.end_slot!;
+    
+    let targetEnd = currentEnd;
+    let actualExtended = 0;
+    
+    for (let i = 1; i <= n; i++) {
+      const tempEnd = currentEnd + i;
+      if (tempEnd >= SLOTS) {
+        break;
+      }
+      if (isOverlap(currentStart, tempEnd, editingEntry.id)) {
+        break;
+      }
+      targetEnd = tempEnd;
+      actualExtended = i;
+    }
+    
+    if (actualExtended === 0) {
+      showToast("더 이상 연장할 수 없습니다. (뒤에 이미 다른 일정이 있거나 범위를 벗어남)");
+      return;
+    }
+    
+    setEditingEntry((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        end_slot: targetEnd,
+      };
+    });
+    
+    if (actualExtended < n) {
+      showToast(`뒤에 작성된 활동이 있어 +${actualExtended}칸만 연장되었습니다.`);
+    } else {
+      showToast(`활동 시간이 +${actualExtended}칸 (${actualExtended * 30}분) 연장되었습니다.`);
+    }
+  };
+
   const handleFinish = async () => {
     const filledSlotsCount = entries.reduce((acc, curr) => acc + (curr.end_slot - curr.start_slot + 1), 0);
     
     if (filledSlotsCount < SLOTS) {
       const confirmProceed = window.confirm(
-        `아직 채워지지 않은 공백 시간이 있습니다. (${SLOTS - filledSlotsCount}칸 비어있음)\n이대로 다이어리 기록을 완료하시겠습니까?`
+        `아직 기록되지 않은 시간대(약 ${((SLOTS - filledSlotsCount) * 30 / 60).toFixed(1)}시간 분량)가 있습니다.\n수면이나 반복 일정은 '직전 슬롯 복제' 및 '+N칸 연장'을 활용해 간편하게 채우실 수 있습니다.\n\n이대로 기록을 완료하고 제출하시겠습니까?`
       );
       if (!confirmProceed) return;
     }
@@ -536,9 +633,15 @@ function DiaryContent() {
       }
     >
       <div className="space-y-4 pb-20 select-none">
-        <div className="bg-[#eaf9fd] border-b border-[#d6eff6] p-3 text-xs font-semibold text-[#0a6b80] rounded-xl flex items-center gap-1.5">
-          <span>💡</span>
-          <span>빈 칸을 <b>터치 후 아래로 드래그</b>하여 활동 블록을 생성하세요.</span>
+        <div className="bg-[#eaf9fd] border border-[#d6eff6] p-3.5 text-xs font-semibold text-[#0a6b80] rounded-xl flex flex-col gap-1.5 shadow-sm">
+          <div className="flex items-center gap-1.5">
+            <span>💡</span>
+            <span>빈 칸을 <b>터치 후 아래로 드래그</b>하여 활동 블록을 생성할 수 있습니다.</span>
+          </div>
+          <div className="flex items-start gap-1 text-[11px] text-[#2c7f91] pl-5 leading-relaxed">
+            <span>•</span>
+            <span>수면, 회의 등 반복·연속 활동은 에디터 상단의 <b>[직전 슬롯 전체 복제]</b> 및 <b>[연속 칸 시간 연장]</b>으로 빠르게 채워보세요!</span>
+          </div>
         </div>
 
         <div
@@ -590,6 +693,7 @@ function DiaryContent() {
                 key={entry.id}
                 onClick={() => {
                   setEditingEntry({ ...entry });
+                  setShowDetailInput(!!entry.activity_other);
                   setEditorOpen(true);
                 }}
                 className={`absolute left-[2px] right-[2px] rounded-xl text-white p-2 flex flex-col justify-center overflow-hidden shadow-sm cursor-pointer z-10 diary-block ${
@@ -650,6 +754,38 @@ function DiaryContent() {
               </span>
             </div>
 
+            {/* 직전동일 및 시간 연장 영역 */}
+            <div className="bg-[#f8fafc] border border-slate-200/80 rounded-2xl p-4 flex flex-col gap-3">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-slate-500">이전 활동에서 복제하기</span>
+                <button
+                  type="button"
+                  onClick={handleCloneLast}
+                  className="flex items-center gap-1.5 text-xs font-extrabold text-cyan bg-white border border-cyan/30 px-3.5 py-2 rounded-xl shadow-sm hover:bg-cyan/5 transition-all"
+                >
+                  📋 직전 슬롯 전체 복제
+                </button>
+              </div>
+              
+              <div className="border-t border-slate-200/60 my-1"></div>
+              
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs font-bold text-slate-500">이후 연속 칸에 같이 적용 (시간 연장)</span>
+                <div className="flex gap-2">
+                  {[1, 2, 4, 8].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => handleExtendSlots(n)}
+                      className="flex-1 py-2 text-xs font-bold text-navy bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 active:scale-95 transition-all shadow-sm"
+                    >
+                      +{n}칸 ({n * 30}분)
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
             {/* 1. 활동 대분류 */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-navy block">어떤 활동을 하셨나요?</label>
@@ -670,14 +806,25 @@ function DiaryContent() {
 
             {/* 1.2 세부 활동 입력 */}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-navy block">세부 활동 기록 (직접 입력)</label>
-              <input
-                type="text"
-                placeholder="예: 주간 기획 업무 회의, 자재 단가 엑셀 정리 등"
-                value={editingEntry.activity_other || ""}
-                onChange={(e) => setEditingEntry((prev) => prev ? ({ ...prev, activity_other: e.target.value }) : null)}
-                className="txt text-sm"
-              />
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-navy">세부 활동 기록 (선택)</label>
+                <button
+                  type="button"
+                  onClick={() => setShowDetailInput((prev) => !prev)}
+                  className="text-xs font-semibold text-cyan hover:underline focus:outline-none"
+                >
+                  {showDetailInput ? "접기 ▲" : "직접 입력 ▾"}
+                </button>
+              </div>
+              {showDetailInput && (
+                <input
+                  type="text"
+                  placeholder="예: 주간 기획 업무 회의, 자재 단가 엑셀 정리 등"
+                  value={editingEntry.activity_other || ""}
+                  onChange={(e) => setEditingEntry((prev) => prev ? ({ ...prev, activity_other: e.target.value }) : null)}
+                  className="txt text-sm"
+                />
+              )}
             </div>
 
             {/* 2. 장소 분류 */}
@@ -802,6 +949,34 @@ function DiaryContent() {
                     {tool.ai_type && (
                       <div className="space-y-1.5">
                         <label className="text-[11px] font-bold text-navy block">사용한 AI 도구명</label>
+                        
+                        {/* 추천 도구 칩 목록 */}
+                        {(AI_RECOMMENDED_TOOLS[tool.ai_type] || []).length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mb-2">
+                            {(AI_RECOMMENDED_TOOLS[tool.ai_type] || []).map((t) => (
+                              <button
+                                key={t}
+                                type="button"
+                                onClick={() => {
+                                  setEditingEntry((prev) => {
+                                    if (!prev) return null;
+                                    const tools = prev.ai_tools ? [...prev.ai_tools] : [];
+                                    if (tools[idx]) {
+                                      tools[idx] = { ...tools[idx], ai_tool_name: t };
+                                    }
+                                    return { ...prev, ai_tools: tools };
+                                  });
+                                }}
+                                className={`chip py-1 px-2.5 text-[10px] font-semibold ${
+                                  tool.ai_tool_name === t ? "on" : ""
+                                }`}
+                              >
+                                {t}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
                         <input
                           type="text"
                           list={`catalog_tools_${idx}`}
@@ -862,10 +1037,6 @@ function DiaryContent() {
 
             {/* 시트 하단 액션 버튼 */}
             <div className="flex gap-2.5 pt-4">
-              <button onClick={handleCloneLast} className="btn ghost flex-none py-4 px-3" title="직전 활동 복제">
-                📋 직전동일
-              </button>
-              
               {!editingEntry.id?.startsWith("temp_") && (
                 <button
                   onClick={() => handleDeleteEntry(editingEntry.id!)}
